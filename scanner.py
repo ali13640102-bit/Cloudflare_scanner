@@ -13,7 +13,8 @@ TIMEOUT = 2.0
 THREAD_COUNT_ROUND_1 = 150
 THREAD_COUNT_ROUND_2 = 20
 MAX_ALLOWED_PING = 450
-PACKET_TEST_COUNT = 3  # تعداد تست پشت سر هم برای پکت‌لاست
+PACKET_TEST_COUNT = 3
+SPEED_TEST_TIMEOUT = 3.0 # حداکثر زمان تست دانلود برای هر آی‌پی برتر
 
 ip_queue = Queue()
 round_1_results = []
@@ -47,6 +48,27 @@ def ping_ip(ip):
         return None
     return None
 
+# قابلیت ۶: تست سرعت واقعی دانلود با دریافت چانک ریز از کلودفلر
+def test_download_speed(ip):
+    try:
+        url = f"https://{ip}/__cf_performance?cb={random.randint(1,100000)}"
+        req = urllib.request.Request(url, headers={"Host": "speed.cloudflare.com", "User-Agent": "Mozilla/5.0"})
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        
+        start_time = time.time()
+        with urllib.request.urlopen(req, context=context, timeout=SPEED_TEST_TIMEOUT) as response:
+            chunk = response.read(256 * 1024) # دانلود ۲۵۶ کیلوبایت چانک نمونه
+            duration = time.time() - start_time
+            if duration > 0:
+                speed_bytes_sec = len(chunk) / duration
+                speed_mbps = (speed_bytes_sec * 8) / (1024 * 1024)
+                return round(speed_mbps, 1)
+    except:
+        pass
+    return 0.0
+
 def worker_round_1():
     while not ip_queue.empty():
         ip = ip_queue.get()
@@ -60,13 +82,11 @@ def worker_round_2():
         ip_info = ip_queue.get()
         success_count = 0
         total_ping = 0
-        
         for _ in range(PACKET_TEST_COUNT):
             p_time = ping_ip(ip_info['ip'])
             if p_time is not None:
                 success_count += 1
                 total_ping += p_time
-                
         if success_count > 0:
             avg_ping = int(total_ping / success_count)
             packet_loss = int(((PACKET_TEST_COUNT - success_count) / PACKET_TEST_COUNT) * 100)
@@ -77,71 +97,64 @@ def worker_round_2():
 def send_telegram_message(text):
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
-    if not bot_token or not chat_id:
-        return
+    if not bot_token or not chat_id: return
     try:
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         data = urllib.parse.urlencode({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode("utf-8")
         req = urllib.request.Request(url, data=data)
         urllib.request.urlopen(req)
-    except:
-        pass
+    except: pass
 
 def main():
+    import random
     try:
-        with open("ips.txt", "r") as f:
-            lines = f.read().splitlines()
-    except FileNotFoundError:
-        return
+        with open("ips.txt", "r") as f: lines = f.read().splitlines()
+    except FileNotFoundError: return
     
     lines = [line.strip() for line in lines if line.strip()]
-    if not lines:
-        return
+    if not lines: return
     
     for line in lines:
         try:
-            for ip in ipaddress.IPv4Network(line, strict=False):
-                ip_queue.put(str(ip))
-        except ValueError:
-            ip_queue.put(line)
+            for ip in ipaddress.IPv4Network(line, strict=False): ip_queue.put(str(ip))
+        except ValueError: ip_queue.put(line)
             
     threads = []
     for _ in range(THREAD_COUNT_ROUND_1):
         t = threading.Thread(target=worker_round_1)
-        t.start()
-        threads.append(t)
+        t.start(); threads.append(t)
     for t in threads: t.join()
     
-    for item in round_1_results:
-        ip_queue.put(item)
+    for item in round_1_results: ip_queue.put(item)
         
     threads = []
     for _ in range(THREAD_COUNT_ROUND_2):
         t = threading.Thread(target=worker_round_2)
-        t.start()
-        threads.append(t)
+        t.start(); threads.append(t)
     for t in threads: t.join()
     
     sorted_ips = sorted(round_2_results, key=lambda x: (x['loss'], x['ping']))
     
+    # خروجی ۱: ذخیره فایل متنی خام معمولی
     with open("result.txt", "w") as f:
-        for item in sorted_ips:
-            f.write(f"{item['ip']}\n")
+        for item in sorted_ips: f.write(f"{item['ip']}\n")
+        
+    # قابلیت ۵: خروجی با فرمت پیشرفته برای کلاینت‌ها (v2ray_ips.txt)
+    with open("v2ray_ips.txt", "w") as f:
+        for idx, item in enumerate(sorted_ips):
+            f.write(f"{item['ip']}#Clean-IP-{idx+1}-Ping-{item['ping']}\n")
             
-    # خواندن تاریخچه قبلی برای قابلیت ۱
+    # خواندن تاریخچه قبلی (قابلیت ۱)
     old_history = set()
     if os.path.exists("history.txt"):
-        with open("history.txt", "r") as f:
-            old_history = set(f.read().splitlines())
+        with open("history.txt", "r") as f: old_history = set(f.read().splitlines())
             
-    # ذخیره تاریخچه جدید
     current_ips = [item['ip'] for item in sorted_ips[:15]]
     with open("history.txt", "w") as f:
-        for ip in current_ips:
-            f.write(f"{ip}\n")
+        for ip in current_ips: f.write(f"{ip}\n")
             
     if sorted_ips:
-        # دسته‌بندی آی‌پی‌ها برای قابلیت ۳
+        # دسته‌بندی آی‌پی‌ها (قابلیت ۳)
         excellent = [i for i in sorted_ips if i['ping'] < 150 and i['loss'] == 0]
         good = [i for i in sorted_ips if 150 <= i['ping'] <= 300 and i['loss'] == 0]
         others = [i for i in sorted_ips if i['ping'] > 300 or i['loss'] > 0]
@@ -149,17 +162,32 @@ def main():
         ranges_str = ", ".join(lines[:3])
         if len(lines) > 3: ranges_str += " و..."
             
-        msg = f"<b>📊 گزارش اسکن همه‌جانبه رنج‌های ({ranges_str})</b>\n\n"
+        msg = f"<b>📊 گزارش اسکن فوق‌پیشرفته رنج‌های ({ranges_str})</b>\n\n"
         msg += f"🟢 پینگ زیر ۱۵۰ (ثابت): <b>{len(excellent)} آی‌پی</b>\n"
         msg += f"🟡 پینگ ۱۵۰ تا ۳۰۰ (ثابت): <b>{len(good)} آی‌پی</b>\n"
         msg += f"🟠 آی‌پی‌های نوسانی یا کند: <b>{len(others)} آی‌پی</b>\n\n"
         
-        msg += "<b>🔥 لیست ۱۰ آی‌پی برتر این دوره:</b>\n"
-        msg += "<i>(علامت ✨ یعنی این آی‌پی جدید است و ساعت قبل نبوده)</i>\n\n"
+        # قابلیت ۴: سیستم هشدار افت کیفیت شدید رنج
+        if len(excellent) + len(good) < 5:
+            msg += "🚨 <b>⚠️ هشدار جدی سلامت شبکه:</b>\n"
+            msg += "<i>تعداد آی‌پی‌های باکیفیت و سبز این رنج شدیداً ریزش کرده! اختلال شدید یا فیلترینگ روی این رنج ردیابی شد.</i>\n\n"
         
-        for item in sorted_ips[:10]:
+        msg += "<b>🔥 لیست ۱۰ آی‌پی برتر + تست سرعت دانلود:</b>\n"
+        msg += "<i>(✨ یعنی آی‌پی جدید است | 🚀 یعنی سرعت دانلود عالی)</i>\n\n"
+        
+        # تست سرعت فقط برای ۵ تا آی‌پی برتر جهت بهینه ماندن زمان اسکن
+        for idx, item in enumerate(sorted_ips[:10]):
             is_new = "✨ " if item['ip'] not in old_history else ""
-            msg += f"{is_new}<code>{item['ip']}</code> ➔ <b>{item['ping']}ms</b> (Loss: {item['loss']}%)\n"
+            
+            speed_info = ""
+            if idx < 5:  # ۵ تای اول تست دانلود می‌گیرند
+                speed = test_download_speed(item['ip'])
+                if speed > 0:
+                    speed_info = f" | 🚀 Speed: <b>{speed} Mbps</b>"
+                else:
+                    speed_info = f" | 🐌 Speed: Low"
+                    
+            msg += f"{is_new}<code>{item['ip']}</code> ➔ <b>{item['ping']}ms</b> (Loss: {item['loss']}%){speed_info}\n"
             
         send_telegram_message(msg)
 
