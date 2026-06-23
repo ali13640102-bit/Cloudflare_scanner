@@ -2,8 +2,8 @@ name: Auto Cloudflare Scanner
 
 on:
   schedule:
-    - cron: '0 * * * *'
-  workflow_dispatch:
+    - cron: '37 * * * *'  # هر ساعت روی دقیقه ۳۷ (زمانی که سرورها خلوت‌ترند) اتوماتیک ران می‌شود
+  workflow_dispatch:      # بهت اجازه میده هر زمان که خواستی دستی هم اسکنر رو استارت بزنی
 
 jobs:
   run-scanner:
@@ -27,7 +27,7 @@ jobs:
       run: |
         git config --local user.email "actions@github.com"
         git config --local user.name "GitHub Actions"
-        git add result.txt
-        git commit -m "Update clean IPs" || exit 0
+        git add result.txt history.txt
+        git commit -m "Update clean IPs and history" || exit 0
         git push
         
