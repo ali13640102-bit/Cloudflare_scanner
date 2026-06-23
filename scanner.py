@@ -5,13 +5,16 @@ from queue import Queue
 import ipaddress
 import time
 import random
+import os
+import urllib.request
+import urllib.parse
 
 PORT = 443
 TIMEOUT = 2.5
 THREAD_COUNT_ROUND_1 = 60
 THREAD_COUNT_ROUND_2 = 20
 MAX_ALLOWED_PING = 300
-RANDOM_COUNT = 3
+RANDOM_COUNT = 5
 
 ip_queue = Queue()
 round_1_results = []
@@ -62,6 +65,19 @@ def worker_round_2():
             round_2_results.append({"ip": ip_info['ip'], "ping": avg_ping})
         ip_queue.task_done()
 
+def send_telegram_message(text):
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if not bot_token or not chat_id:
+        return
+    try:
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        data = urllib.parse.urlencode({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode("utf-8")
+        req = urllib.request.Request(url, data=data)
+        urllib.request.urlopen(req)
+    except:
+        pass
+
 def main():
     try:
         with open("ips.txt", "r") as f:
@@ -100,12 +116,17 @@ def main():
     for t in threads: t.join()
     
     sorted_ips = sorted(round_2_results, key=lambda x: x['ping'])
+    
     with open("result.txt", "w") as f:
         for item in sorted_ips:
             f.write(f"{item['ip']}\n")
+            
+    if sorted_ips:
+        msg = "<b>برترین آی‌پی‌های یافت شده:</b>\n\n"
+        for item in sorted_ips[:10]:
+            msg += f"<code>{item['ip']}</code> ➔ {item['ping']}ms\n"
+        send_telegram_message(msg)
 
-if __name__ == "__main__":
-    main()
 if __name__ == "__main__":
     main()
     
