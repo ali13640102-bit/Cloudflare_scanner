@@ -10,11 +10,11 @@ import urllib.request
 import urllib.parse
 
 PORT = 443
-TIMEOUT = 2.5
-THREAD_COUNT_ROUND_1 = 60
+TIMEOUT = 2.0
+THREAD_COUNT_ROUND_1 = 150
 THREAD_COUNT_ROUND_2 = 20
-MAX_ALLOWED_PING = 300
-RANDOM_COUNT = 5
+MAX_ALLOWED_PING = 450
+RANDOM_COUNT = 1
 
 ip_queue = Queue()
 round_1_results = []
@@ -122,7 +122,8 @@ def main():
             f.write(f"{item['ip']}\n")
             
     if sorted_ips:
-        msg = "<b>برترین آی‌پی‌های یافت شده:</b>\n\n"
+        msg = f"<b>اسکن سریع رنج {chosen_lines[0]} به پایان رسید!</b>\n\n"
+        msg += "<b>برترین آی‌پی‌های یافت شده:</b>\n"
         for item in sorted_ips[:10]:
             msg += f"<code>{item['ip']}</code> ➔ {item['ping']}ms\n"
         send_telegram_message(msg)
