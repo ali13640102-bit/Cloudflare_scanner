@@ -7,10 +7,10 @@ import time
 import random
 
 PORT = 443
-TIMEOUT = 2.0
+TIMEOUT = 2.5
 THREAD_COUNT_ROUND_1 = 50
 THREAD_COUNT_ROUND_2 = 10
-MAX_ALLOWED_PING = 250
+MAX_ALLOWED_PING = 450
 RANDOM_COUNT = 5
 
 ip_queue = Queue()
@@ -104,6 +104,8 @@ def main():
         for item in sorted_ips:
             f.write(f"{item['ip']}\n")
 
+if __name__ == "__main__":
+    main()
 if __name__ == "__main__":
     main()
     
