@@ -88,14 +88,17 @@ def main():
         t.start()
         threads.append(t)
     for t in threads: t.join()
+    
     for item in round_1_results:
         ip_queue.put(item)
+        
     threads = []
     for _ in range(THREAD_COUNT_ROUND_2):
         t = threading.Thread(target=worker_round_2)
         t.start()
         threads.append(t)
     for t in threads: t.join()
+    
     sorted_ips = sorted(round_2_results, key=lambda x: x['ping'])
     with open("result.txt", "w") as f:
         for item in sorted_ips:
