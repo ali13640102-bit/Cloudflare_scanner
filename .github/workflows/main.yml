@@ -1,0 +1,37 @@
+name: Auto Cloudflare Scanner
+
+on:
+  schedule:
+    # این یعنی هر روز ساعت 00:00 بامداد به وقت UTC (حدود ۳:۳۰ شب ایران) خودکار اجرا شو
+    - cron: '0 0 * * *'
+  workflow_dispatch: # این دکمه اجرای دستی رو توی گیت‌هاب فعال می‌کنه
+
+jobs:
+  run-scanner:
+    runs-on: ubuntu-latest
+
+    steps:
+    # ۱. کپی کردن کدهای شما روی سرور گیت‌هاب
+    - name: Checkout repository code
+      uses: actions/checkout@v4
+
+    # ۲. نصب پایتون روی سرور گیت‌هاب
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    # ۳. اجرای کد پایتون اسکنر و ساخت فایل result.txt
+    - name: Run IP Scanner
+      run: python scanner.py
+
+    # ۴. ذخیره و آپدیت کردن فایل result.txt روی گیت‌هاب شما
+    - name: Commit and Push Results
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add result.txt
+        # اگر آی‌پّی جدیدی پیدا نشد و فایلی تغییر نکرد، برنامه بدون خطا رد میشه
+        git commit -m "Routine IP Scan Update: $(date)" || exit 0
+        git push
+        
