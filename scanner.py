@@ -75,29 +75,38 @@ def worker_round_2():
 
 def send_telegram_with_button(text, copy_text):
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID") # اینجا می‌تونی آیدی کانالت رو بذاری مثل @MyChannel
-    if not bot_token or not chat_id: return
-    try:
-        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-        
-        # ساخت دکمه شیشه‌ای کپی یکجا با متد switch_inline_query
-        reply_markup = {
-            "inline_keyboard": [[
-                {"text": "🚀 کپی یکجای آی‌پی‌ها", "switch_inline_query_current_chat": copy_text}
-            ]]
-        }
-        
-        data = {
-            "chat_id": chat_id,
-            "text": text,
-            "parse_mode": "HTML",
-            "reply_markup": json.dumps(reply_markup)
-        }
-        
-        req = urllib.request.Request(url, data=urllib.parse.urlencode(data).encode("utf-8"))
-        urllib.request.urlopen(req)
-    except Exception as e:
-        print(f"Telegram Error: {e}")
+    
+    # مقصدهای ارسال: آیدی عددی خودت و آیدی کانالت
+    MY_PERSONAL_ID = "6453638080"
+    CHANNEL_ID = "@IP_ScannerDR"
+    
+    if not bot_token: return
+    
+    destinations = [MY_PERSONAL_ID, CHANNEL_ID]
+    
+    for chat_id in destinations:
+        try:
+            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            
+            # ساخت دکمه شیشه‌ای کپی یکجای آی‌پی‌ها
+            reply_markup = {
+                "inline_keyboard": [[
+                    {"text": "🚀 کپی یکجای آی‌پی‌ها", "switch_inline_query_current_chat": copy_text}
+                ]]
+            }
+            
+            data = {
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "HTML",
+                "reply_markup": json.dumps(reply_markup)
+            }
+            
+            req = urllib.request.Request(url, data=urllib.parse.urlencode(data).encode("utf-8"))
+            urllib.request.urlopen(req)
+            time.sleep(1) # فاصله کوتاه برای جلوگیری از اسپم تلگرام
+        except Exception as e:
+            print(f"Telegram Error for {chat_id}: {e}")
 
 def main():
     try:
@@ -128,18 +137,17 @@ def main():
     
     sorted_ips = sorted(round_2_results, key=lambda x: (x['loss'], x['ping']))
     
-    # خروجی معمولی
+    # ذخیره در فایل متنی
     with open("result.txt", "w") as f:
         for item in sorted_ips: f.write(f"{item['ip']}\n")
             
     if sorted_ips:
-        # 🎨 دیزاین فوق‌العاده شیک و مینیمال جدید
+        # دیزاین فوق‌العاده شیک و جدید
         msg = f"⚡️ <b>برترین آی‌پی‌های تمیز کلودفلر</b>\n"
         msg += f"───────────────────\n"
         
         raw_ips_list = []
         for idx, item in enumerate(sorted_ips[:10]):
-            # تبدیل وضعیت پکت‌لاست به آنتن گوشی
             if item['loss'] == 0:
                 signal = "📶 عالی"
             elif item['loss'] <= 33:
@@ -151,9 +159,8 @@ def main():
             raw_ips_list.append(item['ip'])
             
         msg += f"───────────────────\n"
-        msg += f"📢 <b>@YourChannel</b> | 🔄 <i>بروزرسانی خودکار</i>"
+        msg += f"📢 <b>@IP_ScannerDR</b> | 🔄 <i>بروزرسانی خودکار</i>"
         
-        # متنی که برای کپی یکجا آماده میشه
         copy_all_text = "\n".join(raw_ips_list)
         
         send_telegram_with_button(msg, copy_all_text)
