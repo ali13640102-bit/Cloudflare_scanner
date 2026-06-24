@@ -1,3 +1,5 @@
-162.159.36.1#Clean-IP-1-Ping-38
-199.181.197.35#Clean-IP-2-Ping-45
-199.181.197.221#Clean-IP-3-Ping-48
+199.181.197.35#Clean-IP-1-Ping-77
+162.159.36.1#Clean-IP-2-Ping-84
+199.181.197.35#Clean-IP-3-Ping-86
+199.181.197.221#Clean-IP-4-Ping-90
+199.181.197.221#Clean-IP-5-Ping-92
