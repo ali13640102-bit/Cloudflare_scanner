@@ -73,12 +73,11 @@ def worker_round_2():
                 round_2_results.append({"ip": ip_info['ip'], "ping": avg_ping, "loss": packet_loss})
         ip_queue.task_done()
 
-def send_telegram_with_button(text, copy_text):
+def send_telegram(text):
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     
-    # مقصدهای ارسال: آیدی عددی خودت و آیدی کانالت
     MY_PERSONAL_ID = "6453638080"
-    CHANNEL_ID = "@IP_ScannerDR"
+    CHANNEL_ID = "-1004451276132"  # آیدی عددی دقیق کانال شما
     
     if not bot_token: return
     
@@ -87,24 +86,15 @@ def send_telegram_with_button(text, copy_text):
     for chat_id in destinations:
         try:
             url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-            
-            # ساخت دکمه شیشه‌ای کپی یکجای آی‌پی‌ها
-            reply_markup = {
-                "inline_keyboard": [[
-                    {"text": "🚀 کپی یکجای آی‌پی‌ها", "switch_inline_query_current_chat": copy_text}
-                ]]
-            }
-            
             data = {
                 "chat_id": chat_id,
                 "text": text,
                 "parse_mode": "HTML",
-                "reply_markup": json.dumps(reply_markup)
+                "disable_web_page_preview": True
             }
-            
             req = urllib.request.Request(url, data=urllib.parse.urlencode(data).encode("utf-8"))
             urllib.request.urlopen(req)
-            time.sleep(1) # فاصله کوتاه برای جلوگیری از اسپم تلگرام
+            time.sleep(1)
         except Exception as e:
             print(f"Telegram Error for {chat_id}: {e}")
 
@@ -137,12 +127,10 @@ def main():
     
     sorted_ips = sorted(round_2_results, key=lambda x: (x['loss'], x['ping']))
     
-    # ذخیره در فایل متنی
     with open("result.txt", "w") as f:
         for item in sorted_ips: f.write(f"{item['ip']}\n")
             
     if sorted_ips:
-        # دیزاین فوق‌العاده شیک و جدید
         msg = f"⚡️ <b>برترین آی‌پی‌های تمیز کلودفلر</b>\n"
         msg += f"───────────────────\n"
         
@@ -159,11 +147,15 @@ def main():
             raw_ips_list.append(item['ip'])
             
         msg += f"───────────────────\n"
+        
+        # بخش کپی راحت با یک ضربه بر روی کادر
+        copy_all_text = "\n".join(raw_ips_list)
+        msg += f"👇 <b>برای کپی یکجای تمام آی‌پی‌ها روی کادر زیر بزنید:</b>\n"
+        msg += f"<code>{copy_all_text}</code>\n"
+        msg += f"───────────────────\n"
         msg += f"📢 <b>@IP_ScannerDR</b> | 🔄 <i>بروزرسانی خودکار</i>"
         
-        copy_all_text = "\n".join(raw_ips_list)
-        
-        send_telegram_with_button(msg, copy_all_text)
+        send_telegram(msg)
 
 if __name__ == "__main__":
     main()
