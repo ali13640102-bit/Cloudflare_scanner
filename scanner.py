@@ -7,6 +7,7 @@ import time
 import os
 import urllib.request
 import urllib.parse
+import json
 
 PORT = 443
 TIMEOUT = 2.0
@@ -14,7 +15,6 @@ THREAD_COUNT_ROUND_1 = 150
 THREAD_COUNT_ROUND_2 = 20
 MAX_ALLOWED_PING = 450
 PACKET_TEST_COUNT = 3
-SPEED_TEST_TIMEOUT = 3.0 # حداکثر زمان تست دانلود برای هر آی‌پی برتر
 
 ip_queue = Queue()
 round_1_results = []
@@ -48,27 +48,6 @@ def ping_ip(ip):
         return None
     return None
 
-# قابلیت ۶: تست سرعت واقعی دانلود با دریافت چانک ریز از کلودفلر
-def test_download_speed(ip):
-    try:
-        url = f"https://{ip}/__cf_performance?cb={random.randint(1,100000)}"
-        req = urllib.request.Request(url, headers={"Host": "speed.cloudflare.com", "User-Agent": "Mozilla/5.0"})
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        
-        start_time = time.time()
-        with urllib.request.urlopen(req, context=context, timeout=SPEED_TEST_TIMEOUT) as response:
-            chunk = response.read(256 * 1024) # دانلود ۲۵۶ کیلوبایت چانک نمونه
-            duration = time.time() - start_time
-            if duration > 0:
-                speed_bytes_sec = len(chunk) / duration
-                speed_mbps = (speed_bytes_sec * 8) / (1024 * 1024)
-                return round(speed_mbps, 1)
-    except:
-        pass
-    return 0.0
-
 def worker_round_1():
     while not ip_queue.empty():
         ip = ip_queue.get()
@@ -94,19 +73,33 @@ def worker_round_2():
                 round_2_results.append({"ip": ip_info['ip'], "ping": avg_ping, "loss": packet_loss})
         ip_queue.task_done()
 
-def send_telegram_message(text):
+def send_telegram_with_button(text, copy_text):
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID") # اینجا می‌تونی آیدی کانالت رو بذاری مثل @MyChannel
     if not bot_token or not chat_id: return
     try:
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-        data = urllib.parse.urlencode({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode("utf-8")
-        req = urllib.request.Request(url, data=data)
+        
+        # ساخت دکمه شیشه‌ای کپی یکجا با متد switch_inline_query
+        reply_markup = {
+            "inline_keyboard": [[
+                {"text": "🚀 کپی یکجای آی‌پی‌ها", "switch_inline_query_current_chat": copy_text}
+            ]]
+        }
+        
+        data = {
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps(reply_markup)
+        }
+        
+        req = urllib.request.Request(url, data=urllib.parse.urlencode(data).encode("utf-8"))
         urllib.request.urlopen(req)
-    except: pass
+    except Exception as e:
+        print(f"Telegram Error: {e}")
 
 def main():
-    import random
     try:
         with open("ips.txt", "r") as f: lines = f.read().splitlines()
     except FileNotFoundError: return
@@ -135,61 +128,35 @@ def main():
     
     sorted_ips = sorted(round_2_results, key=lambda x: (x['loss'], x['ping']))
     
-    # خروجی ۱: ذخیره فایل متنی خام معمولی
+    # خروجی معمولی
     with open("result.txt", "w") as f:
         for item in sorted_ips: f.write(f"{item['ip']}\n")
-        
-    # قابلیت ۵: خروجی با فرمت پیشرفته برای کلاینت‌ها (v2ray_ips.txt)
-    with open("v2ray_ips.txt", "w") as f:
-        for idx, item in enumerate(sorted_ips):
-            f.write(f"{item['ip']}#Clean-IP-{idx+1}-Ping-{item['ping']}\n")
-            
-    # خواندن تاریخچه قبلی (قابلیت ۱)
-    old_history = set()
-    if os.path.exists("history.txt"):
-        with open("history.txt", "r") as f: old_history = set(f.read().splitlines())
-            
-    current_ips = [item['ip'] for item in sorted_ips[:15]]
-    with open("history.txt", "w") as f:
-        for ip in current_ips: f.write(f"{ip}\n")
             
     if sorted_ips:
-        # دسته‌بندی آی‌پی‌ها (قابلیت ۳)
-        excellent = [i for i in sorted_ips if i['ping'] < 150 and i['loss'] == 0]
-        good = [i for i in sorted_ips if 150 <= i['ping'] <= 300 and i['loss'] == 0]
-        others = [i for i in sorted_ips if i['ping'] > 300 or i['loss'] > 0]
+        # 🎨 دیزاین فوق‌العاده شیک و مینیمال جدید
+        msg = f"⚡️ <b>برترین آی‌پی‌های تمیز کلودفلر</b>\n"
+        msg += f"───────────────────\n"
         
-        ranges_str = ", ".join(lines[:3])
-        if len(lines) > 3: ranges_str += " و..."
-            
-        msg = f"<b>📊 گزارش اسکن فوق‌پیشرفته رنج‌های ({ranges_str})</b>\n\n"
-        msg += f"🟢 پینگ زیر ۱۵۰ (ثابت): <b>{len(excellent)} آی‌پی</b>\n"
-        msg += f"🟡 پینگ ۱۵۰ تا ۳۰۰ (ثابت): <b>{len(good)} آی‌پی</b>\n"
-        msg += f"🟠 آی‌پی‌های نوسانی یا کند: <b>{len(others)} آی‌پی</b>\n\n"
-        
-        # قابلیت ۴: سیستم هشدار افت کیفیت شدید رنج
-        if len(excellent) + len(good) < 5:
-            msg += "🚨 <b>⚠️ هشدار جدی سلامت شبکه:</b>\n"
-            msg += "<i>تعداد آی‌پی‌های باکیفیت و سبز این رنج شدیداً ریزش کرده! اختلال شدید یا فیلترینگ روی این رنج ردیابی شد.</i>\n\n"
-        
-        msg += "<b>🔥 لیست ۱۰ آی‌پی برتر + تست سرعت دانلود:</b>\n"
-        msg += "<i>(✨ یعنی آی‌پی جدید است | 🚀 یعنی سرعت دانلود عالی)</i>\n\n"
-        
-        # تست سرعت فقط برای ۵ تا آی‌پی برتر جهت بهینه ماندن زمان اسکن
+        raw_ips_list = []
         for idx, item in enumerate(sorted_ips[:10]):
-            is_new = "✨ " if item['ip'] not in old_history else ""
+            # تبدیل وضعیت پکت‌لاست به آنتن گوشی
+            if item['loss'] == 0:
+                signal = "📶 عالی"
+            elif item['loss'] <= 33:
+                signal = "⚡️ پایدار"
+            else:
+                signal = "⚠️ نوسانی"
+                
+            msg += f"🔹 <code>{item['ip']}</code>  ➔  ⏱ <b>{item['ping']}ms</b> | {signal}\n"
+            raw_ips_list.append(item['ip'])
             
-            speed_info = ""
-            if idx < 5:  # ۵ تای اول تست دانلود می‌گیرند
-                speed = test_download_speed(item['ip'])
-                if speed > 0:
-                    speed_info = f" | 🚀 Speed: <b>{speed} Mbps</b>"
-                else:
-                    speed_info = f" | 🐌 Speed: Low"
-                    
-            msg += f"{is_new}<code>{item['ip']}</code> ➔ <b>{item['ping']}ms</b> (Loss: {item['loss']}%){speed_info}\n"
-            
-        send_telegram_message(msg)
+        msg += f"───────────────────\n"
+        msg += f"📢 <b>@YourChannel</b> | 🔄 <i>بروزرسانی خودکار</i>"
+        
+        # متنی که برای کپی یکجا آماده میشه
+        copy_all_text = "\n".join(raw_ips_list)
+        
+        send_telegram_with_button(msg, copy_all_text)
 
 if __name__ == "__main__":
     main()
