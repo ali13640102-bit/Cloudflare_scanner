@@ -73,30 +73,48 @@ def worker_round_2():
                 round_2_results.append({"ip": ip_info['ip'], "ping": avg_ping, "loss": packet_loss})
         ip_queue.task_done()
 
-def send_telegram(text):
+def send_telegram(text, bot_username, copy_text):
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     
     MY_PERSONAL_ID = "6453638080"
-    CHANNEL_ID = "-1004451276132"  # آیدی عددی دقیق کانال شما
+    CHANNEL_ID = "-1004451276132"
     
     if not bot_token: return
     
-    destinations = [MY_PERSONAL_ID, CHANNEL_ID]
+    # ساختن لینک عمیق برای هدایت به پی‌وی ربات جهت کپی آسان
+    encoded_text = urllib.parse.quote(copy_text)
+    bot_link = f"https://t.me/{bot_username}?start=copy" 
     
-    for chat_id in destinations:
+    # تنظیمات ارسال: برای کانال دکمه شیشه‌ای می‌ذاریم، برای خودت پیام ساده
+    destinations = [
+        {"id": MY_PERSONAL_ID, "has_button": False},
+        {"id": CHANNEL_ID, "has_button": True}
+    ]
+    
+    for dest in destinations:
         try:
             url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            
             data = {
-                "chat_id": chat_id,
+                "chat_id": dest["id"],
                 "text": text,
                 "parse_mode": "HTML",
                 "disable_web_page_preview": True
             }
+            
+            if dest["has_button"]:
+                reply_markup = {
+                    "inline_keyboard": [[
+                        {"text": "🚀 کپی یکجای آی‌پی‌ها", "url": bot_link}
+                    ]]
+                }
+                data["reply_markup"] = json.dumps(reply_markup)
+                
             req = urllib.request.Request(url, data=urllib.parse.urlencode(data).encode("utf-8"))
             urllib.request.urlopen(req)
             time.sleep(1)
         except Exception as e:
-            print(f"Telegram Error for {chat_id}: {e}")
+            print(f"Telegram Error for {dest['id']}: {e}")
 
 def main():
     try:
@@ -147,15 +165,14 @@ def main():
             raw_ips_list.append(item['ip'])
             
         msg += f"───────────────────\n"
-        
-        # بخش کپی راحت با یک ضربه بر روی کادر
-        copy_all_text = "\n".join(raw_ips_list)
-        msg += f"👇 <b>برای کپی یکجای تمام آی‌پی‌ها روی کادر زیر بزنید:</b>\n"
-        msg += f"<code>{copy_all_text}</code>\n"
-        msg += f"───────────────────\n"
         msg += f"📢 <b>@IP_ScannerDR</b> | 🔄 <i>بروزرسانی خودکار</i>"
         
-        send_telegram(msg)
+        copy_all_text = "\n".join(raw_ips_list)
+        
+        # یوزرنیم ربات شما که دقیق جایگذاری شد
+        BOT_USERNAME = "scannerDR_DRAGON_bot" 
+        
+        send_telegram(msg, BOT_USERNAME, copy_all_text)
 
 if __name__ == "__main__":
     main()
