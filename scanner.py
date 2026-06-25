@@ -11,6 +11,7 @@ import json
 import re
 import random
 from datetime import datetime, timedelta
+import sys
 
 PORT = 443
 TIMEOUT = 2.0
@@ -82,19 +83,14 @@ def get_ping_bar(ping):
     bar = "🟩" * filled_blocks + "⬜" * (total_blocks - filled_blocks)
     return bar
 
-def send_telegram(text, raw_ips_text):
+def send_telegram(text, raw_ips_text, target_user_id):
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    MY_PERSONAL_ID = "6453638080"
-    
     if not bot_token: return
     
     try:
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-        
-        # کدگذاری ایمن لیست متنی به صورت ستونی برای لینک مستقیم کلیپ‌بورد تلگرام
         encoded_ips = urllib.parse.quote(raw_ips_text)
         
-        # ساخت دکمه شیشه‌ای کپی آنی مستقیم درون کیبورد با استاندارد جدید tg://copy
         reply_markup = {
             "inline_keyboard": [
                 [{"text": "📋 کپی یک‌جای تمام آی‌پی‌ها", "url": f"tg://copy?text={encoded_ips}"}],
@@ -104,7 +100,7 @@ def send_telegram(text, raw_ips_text):
         }
         
         data = {
-            "chat_id": MY_PERSONAL_ID,
+            "chat_id": target_user_id, # ارسال مستقیم و انحصاری به شناسه کاربری که اسکن را شروع کرده است
             "text": text,
             "parse_mode": "HTML",
             "disable_web_page_preview": True,
@@ -147,6 +143,9 @@ def fetch_ips_to_scan():
     return list(ips_to_scan)
 
 def main():
+    # دریافت شناسه کلاینت از ورودی محیطی سیستم گیت هاب؛ در غیر اینصورت ارسال به ادمین پیش‌فرض
+    target_user_id = os.environ.get("TARGET_USER_ID", "6453638080")
+    
     target_ips = fetch_ips_to_scan()
     if not target_ips: return
     random.shuffle(target_ips)
@@ -173,7 +172,6 @@ def main():
         for item in sorted_ips: f.write(f"{item['ip']}\n")
             
     if sorted_ips:
-        # هدر زیبای اسکنر
         msg = f"🛰 <b>[ CLOUDFLARE CYBER SCANNER ]</b>\n"
         msg += f"<code>────────────────────────────</code>\n"
         
@@ -185,28 +183,26 @@ def main():
                 
             ping_bar = get_ping_bar(item['ping'])
             
-            # چیدمان مدل اول (هکری و فوق‌العاده جمع‌وجور)
-            msg += f"⚡️ {light} <b>#{idx+1:02d}</b> ── <code>{item['ip']}</code> ⚡️ <b>{item['ping']}ms</b>\n"
+            # قالب متنی فوق العاده خلوت هکری طبق مدل اول مورد تایید شما
+            msg += f"⚡️ {light} <b>#{idx+1:02d}</b> ── <code>{item['ip']}</code>  ⚡️ <b>{item['ping']}ms</b>\n"
             msg += f"{ping_bar}\n\n"
             
             raw_ips_list.append(item['ip'])
             
         msg += f"<code>────────────────────────────</code>\n"
         
-        # چیدمان آی‌پی‌ها کاملاً ستونی و تمیز برای کپی شدن در حافظه سیستم
         copy_all_text = "\n".join(raw_ips_list)
         
-        # محاسبه ساعت زنده و آنلاین ایران همراه با ثانیه‌شمار دقیق
         tehran_time = datetime.utcnow() + timedelta(hours=3, minutes=30)
         time_str = tehran_time.strftime("%H:%M:%S")
         
-        # بخش انتهایی امضا همراه با آیدی‌ها
+        # امضا و ثبت اطلاعات کانال و شناسه پشتیبانی شما
         msg += f"🕒  {time_str}\n"
         msg += f"🌐 @IP_ScannerDR\n"
         msg += f"👤 @Eror_508"
         
-        send_telegram(msg, copy_all_text)
+        send_telegram(msg, copy_all_text, target_user_id)
 
 if __name__ == "__main__":
     main()
-    
+        
