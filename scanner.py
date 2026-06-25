@@ -99,11 +99,10 @@ def send_telegram(text):
         except Exception as e:
             print(f"Telegram Error for {chat_id}: {e}")
 
-def fetch_and_convert_to_ranges():
-    all_extracted_ips = []
-    unique_subnets = set()
+def fetch_ips_to_scan():
+    ips_to_scan = set()
     
-    # ۱. دانلود از منبع آنلاین
+    # ۱. دانلود تمام تک‌آی‌پی‌های موجود در سایت منبع
     try:
         url = "https://raw.githubusercontent.com/vfarid/cf-clean-ips/main/list.txt"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -113,42 +112,37 @@ def fetch_and_convert_to_ranges():
         for line in lines:
             match = re.search(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', line)
             if match:
-                all_extracted_ips.append(match.group(0))
+                ips_to_scan.add(match.group(0)) # اضافه کردن مستقیم تک‌آی‌پی بدون تبدیل به رنج
     except Exception as e:
         print(f"Error fetching online IPs: {e}")
 
-    # ۲. انتخاب ۱۵ آی‌پی کاملاً شانسی (محدودیت برای جلوگیری از سنگین شدن)
-    if all_extracted_ips:
-        sampled_ips = random.sample(all_extracted_ips, min(15, len(all_extracted_ips)))
-        for ip in sampled_ips:
-            try:
-                network = ipaddress.IPv4Network(f"{ip}/24", strict=False)
-                unique_subnets.add(str(network))
-            except ValueError:
-                continue
-
-    # ۳. اضافه کردن رنج‌های دستی شما از فایل ips.txt (اگر فایلی وجود داشته باشه)
+    # ۲. اضافه کردن رنج‌ها یا آی‌پی‌های دستی شما از فایل ips.txt (در صورت وجود)
     try:
         if os.path.exists("ips.txt"):
             with open("ips.txt", "r") as f:
                 local_lines = f.read().splitlines()
             for line in local_lines:
                 if line.strip():
-                    unique_subnets.add(line.strip())
+                    try:
+                        # اگر در فایل داخلی رنج نوشته بودید، آی‌پی‌های آن رنج را باز می‌کند
+                        for ip in ipaddress.IPv4Network(line.strip(), strict=False):
+                            ips_to_scan.add(str(ip))
+                    except ValueError:
+                        ips_to_scan.add(line.strip())
     except Exception as e:
         print(f"Error reading local ips.txt: {e}")
         
-    return list(unique_subnets)
+    return list(ips_to_scan)
 
 def main():
-    ranges = fetch_and_convert_to_ranges()
-    if not ranges: return
+    target_ips = fetch_ips_to_scan()
+    if not target_ips: return
     
-    for r in ranges:
-        try:
-            for ip in ipaddress.IPv4Network(r, strict=False): ip_queue.put(str(ip))
-        except ValueError:
-            ip_queue.put(r)
+    # مخلوط کردن آی‌پی‌ها برای اسکن عادلانه
+    random.shuffle(target_ips)
+    
+    for ip in target_ips:
+        ip_queue.put(ip)
             
     threads = []
     for _ in range(THREAD_COUNT_ROUND_1):
@@ -208,4 +202,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+        
