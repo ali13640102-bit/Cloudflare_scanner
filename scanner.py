@@ -76,22 +76,49 @@ def worker_round_2():
                 round_2_results.append({"ip": ip_info['ip'], "ping": avg_ping, "loss": packet_loss})
         ip_queue.task_done()
 
-def send_telegram(text):
+def get_ping_bar(ping):
+    # ساخت نمودار خطی متنی برای پینگ (بخش اول - گزینه ۲)
+    total_blocks = 8
+    # محاسبه بر اساس محدوده پینگ ۵۰ تا ۲۵۰
+    filled_blocks = max(1, min(total_blocks, int((250 - ping) / 25))) if ping < 250 else 1
+    bar = "🟩" * filled_blocks + "⬜" * (total_blocks - filled_blocks)
+    return bar
+
+def send_telegram(text, raw_ips_text):
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     MY_PERSONAL_ID = "6453638080"
     CHANNEL_ID = "-1004451276132"
     
     if not bot_token: return
-    destinations = [MY_PERSONAL_ID, CHANNEL_ID]
     
+    # ساخت لینک وب‌هوک گیت‌هاب بدون نیاز به هاست (بخش چهارم - گزینه ۱۰)
+    # لینک مستقیم به اجرای ورک‌فلو اکشنز شما
+    repo_owner = "ScannerDR" # نام کاربری گیت‌هاب شما (اگه متفاوته عوضش کن)
+    repo_name = "Cloudflare-Scanner" # نام ریپازیتوری شما (اگه متفاوته عوضش کن)
+    github_token = os.environ.get("GH_PAT_TOKEN", "") # توکن امنیتی گیت‌هاب
+    
+    # ساختن یک لینک شیک برای دکمه وب‌هوک
+    trigger_link = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/workflows/main.yml/dispatches"
+    
+    destinations = [MY_PERSONAL_ID, CHANNEL_ID]
     for chat_id in destinations:
         try:
             url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            
+            # ساخت دکمه‌های شیشه‌ای لوکس
+            reply_markup = {
+                "inline_keyboard": [
+                    [{"text": "🔄 درخواست اسکن آنی و زنده", "url": f"https://t.me/scannerDR_DRAGON_bot?start=scan"}],
+                    [{"text": "📦 دانلود فایل تکست آی‌پی‌ها", "url": f"https://t.me/scannerDR_DRAGON_bot?start=file"}]
+                ]
+            }
+            
             data = {
                 "chat_id": chat_id,
                 "text": text,
                 "parse_mode": "HTML",
-                "disable_web_page_preview": True
+                "disable_web_page_preview": True,
+                "reply_markup": json.dumps(reply_markup)
             }
             req = urllib.request.Request(url, data=urllib.parse.urlencode(data).encode("utf-8"))
             urllib.request.urlopen(req)
@@ -101,48 +128,39 @@ def send_telegram(text):
 
 def fetch_ips_to_scan():
     ips_to_scan = set()
-    
-    # ۱. دانلود تمام تک‌آی‌پی‌های موجود در سایت منبع
+    all_extracted_ips = []
     try:
         url = "https://raw.githubusercontent.com/vfarid/cf-clean-ips/main/list.txt"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req) as response:
             lines = response.read().decode('utf-8').splitlines()
-            
         for line in lines:
             match = re.search(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', line)
-            if match:
-                ips_to_scan.add(match.group(0)) # اضافه کردن مستقیم تک‌آی‌پی بدون تبدیل به رنج
+            if match: all_extracted_ips.append(match.group(0))
     except Exception as e:
         print(f"Error fetching online IPs: {e}")
 
-    # ۲. اضافه کردن رنج‌ها یا آی‌پی‌های دستی شما از فایل ips.txt (در صورت وجود)
+    if all_extracted_ips:
+        for ip in all_extracted_ips: ips_to_scan.add(ip)
+
     try:
         if os.path.exists("ips.txt"):
-            with open("ips.txt", "r") as f:
-                local_lines = f.read().splitlines()
+            with open("ips.txt", "r") as f: local_lines = f.read().splitlines()
             for line in local_lines:
                 if line.strip():
                     try:
-                        # اگر در فایل داخلی رنج نوشته بودید، آی‌پی‌های آن رنج را باز می‌کند
-                        for ip in ipaddress.IPv4Network(line.strip(), strict=False):
-                            ips_to_scan.add(str(ip))
-                    except ValueError:
-                        ips_to_scan.add(line.strip())
+                        for ip in ipaddress.IPv4Network(line.strip(), strict=False): ips_to_scan.add(str(ip))
+                    except ValueError: ips_to_scan.add(line.strip())
     except Exception as e:
         print(f"Error reading local ips.txt: {e}")
-        
     return list(ips_to_scan)
 
 def main():
     target_ips = fetch_ips_to_scan()
     if not target_ips: return
-    
-    # مخلوط کردن آی‌پی‌ها برای اسکن عادلانه
     random.shuffle(target_ips)
     
-    for ip in target_ips:
-        ip_queue.put(ip)
+    for ip in target_ips: ip_queue.put(ip)
             
     threads = []
     for _ in range(THREAD_COUNT_ROUND_1):
@@ -164,42 +182,39 @@ def main():
         for item in sorted_ips: f.write(f"{item['ip']}\n")
             
     if sorted_ips:
-        msg = f"⚡️ <b>برترین آی‌پی‌های تمیز کلودفلر</b>\n"
-        msg += f"───────────────────\n"
+        # دیزاین پایگاه هکری و سایبرپانکی (بخش اول - گزینه ۱)
+        msg = f"🛰 <b>[ CLOUDFLARE CYBER SCANNER ]</b>\n"
+        msg += f"<code>────────────────────────────</code>\n"
         
         raw_ips_list = []
         for idx, item in enumerate(sorted_ips[:10]):
-            if item['ping'] <= 110:
-                light = "🟢"
-            elif item['ping'] <= 190:
-                light = "🟡"
-            else:
-                light = "🔴"
+            if item['ping'] <= 110: light = "🟢"
+            elif item['ping'] <= 190: light = "🟡"
+            else: light = "🔴"
                 
-            if item['loss'] == 0:
-                signal = "📶 عالی"
-            elif item['loss'] <= 33:
-                signal = "⚡️ پایدار"
-            else:
-                signal = "⚠️ نوسانی"
-                
-            msg += f"{light} <code>{item['ip']}</code>  ➔  ⏱ <b>{item['ping']}ms</b> | {signal}\n"
+            ping_bar = get_ping_bar(item['ping'])
+            
+            # کارت مشخصات آی‌پی تفکیک شده (بخش اول - گزینه ۳)
+            msg += f"┌─ {light} <b>RANK #{idx+1}</b>\n"
+            msg += f"├ HOST: <code>{item['ip']}</code>\n"
+            msg += f"└ PING: <b>{item['ping']}ms</b> | {ping_bar}\n\n"
+            
             raw_ips_list.append(item['ip'])
             
-        msg += f"───────────────────\n"
+        msg += f"<code>────────────────────────────</code>\n"
         
         copy_all_text = "\n".join(raw_ips_list)
-        msg += f"👇 <b>برای کپی یکجای تمام آی‌پی‌ها روی کادر زیر بزنید:</b>\n"
+        msg += f"👇 <b>[ CLICK TO COPY ALL TARGETS ]</b>\n"
         msg += f"<code>{copy_all_text}</code>\n"
-        msg += f"───────────────────\n"
+        msg += f"<code>────────────────────────────</code>\n"
         
         tehran_time = datetime.utcnow() + timedelta(hours=3, minutes=30)
         time_str = tehran_time.strftime("%H:%M")
         
-        msg += f"📢 <b>@IP_ScannerDR</b> | 🕒 <i>ساعت اسکن: {time_str} به وقت تهران</i>"
+        msg += f"📢 <b>@IP_ScannerDR</b> | 🕒 <i>SYS_TIME: {time_str} IRST</i>"
         
-        send_telegram(msg)
+        send_telegram(msg, copy_all_text)
 
 if __name__ == "__main__":
     main()
-        
+    
