@@ -8,6 +8,9 @@ import os
 import urllib.request
 import urllib.parse
 import json
+import re
+import random
+from datetime import datetime, timedelta
 
 PORT = 443
 TIMEOUT = 2.0
@@ -75,12 +78,10 @@ def worker_round_2():
 
 def send_telegram(text):
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    
     MY_PERSONAL_ID = "6453638080"
-    CHANNEL_ID = "-1004451276132" # آیدی عددی کانال شما
+    CHANNEL_ID = "-1004451276132"
     
     if not bot_token: return
-    
     destinations = [MY_PERSONAL_ID, CHANNEL_ID]
     
     for chat_id in destinations:
@@ -98,18 +99,56 @@ def send_telegram(text):
         except Exception as e:
             print(f"Telegram Error for {chat_id}: {e}")
 
-def main():
+def fetch_and_convert_to_ranges():
+    all_extracted_ips = []
+    unique_subnets = set()
+    
+    # ۱. دانلود از منبع آنلاین
     try:
-        with open("ips.txt", "r") as f: lines = f.read().splitlines()
-    except FileNotFoundError: return
+        url = "https://raw.githubusercontent.com/vfarid/cf-clean-ips/main/list.txt"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
+            lines = response.read().decode('utf-8').splitlines()
+            
+        for line in lines:
+            match = re.search(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', line)
+            if match:
+                all_extracted_ips.append(match.group(0))
+    except Exception as e:
+        print(f"Error fetching online IPs: {e}")
+
+    # ۲. انتخاب ۱۵ آی‌پی کاملاً شانسی (محدودیت برای جلوگیری از سنگین شدن)
+    if all_extracted_ips:
+        sampled_ips = random.sample(all_extracted_ips, min(15, len(all_extracted_ips)))
+        for ip in sampled_ips:
+            try:
+                network = ipaddress.IPv4Network(f"{ip}/24", strict=False)
+                unique_subnets.add(str(network))
+            except ValueError:
+                continue
+
+    # ۳. اضافه کردن رنج‌های دستی شما از فایل ips.txt (اگر فایلی وجود داشته باشه)
+    try:
+        if os.path.exists("ips.txt"):
+            with open("ips.txt", "r") as f:
+                local_lines = f.read().splitlines()
+            for line in local_lines:
+                if line.strip():
+                    unique_subnets.add(line.strip())
+    except Exception as e:
+        print(f"Error reading local ips.txt: {e}")
+        
+    return list(unique_subnets)
+
+def main():
+    ranges = fetch_and_convert_to_ranges()
+    if not ranges: return
     
-    lines = [line.strip() for line in lines if line.strip()]
-    if not lines: return
-    
-    for line in lines:
+    for r in ranges:
         try:
-            for ip in ipaddress.IPv4Network(line, strict=False): ip_queue.put(str(ip))
-        except ValueError: ip_queue.put(line)
+            for ip in ipaddress.IPv4Network(r, strict=False): ip_queue.put(str(ip))
+        except ValueError:
+            ip_queue.put(r)
             
     threads = []
     for _ in range(THREAD_COUNT_ROUND_1):
@@ -136,6 +175,13 @@ def main():
         
         raw_ips_list = []
         for idx, item in enumerate(sorted_ips[:10]):
+            if item['ping'] <= 110:
+                light = "🟢"
+            elif item['ping'] <= 190:
+                light = "🟡"
+            else:
+                light = "🔴"
+                
             if item['loss'] == 0:
                 signal = "📶 عالی"
             elif item['loss'] <= 33:
@@ -143,17 +189,20 @@ def main():
             else:
                 signal = "⚠️ نوسانی"
                 
-            msg += f"🔹 <code>{item['ip']}</code>  ➔  ⏱ <b>{item['ping']}ms</b> | {signal}\n"
+            msg += f"{light} <code>{item['ip']}</code>  ➔  ⏱ <b>{item['ping']}ms</b> | {signal}\n"
             raw_ips_list.append(item['ip'])
             
         msg += f"───────────────────\n"
         
-        # کادر کپی جادویی و تروتمیز بدون دکمه شیشه‌ای اضافه
         copy_all_text = "\n".join(raw_ips_list)
         msg += f"👇 <b>برای کپی یکجای تمام آی‌پی‌ها روی کادر زیر بزنید:</b>\n"
         msg += f"<code>{copy_all_text}</code>\n"
         msg += f"───────────────────\n"
-        msg += f"📢 <b>@IP_ScannerDR</b> | 🔄 <i>بروزرسانی خودکار</i>"
+        
+        tehran_time = datetime.utcnow() + timedelta(hours=3, minutes=30)
+        time_str = tehran_time.strftime("%H:%M")
+        
+        msg += f"📢 <b>@IP_ScannerDR</b> | 🕒 <i>ساعت اسکن: {time_str} به وقت تهران</i>"
         
         send_telegram(msg)
 
