@@ -85,35 +85,34 @@ def get_ping_bar(ping):
 def send_telegram(text, raw_ips_text):
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     MY_PERSONAL_ID = "6453638080"
-    CHANNEL_ID = "-1004451276132"
     
     if not bot_token: return
     
-    destinations = [MY_PERSONAL_ID, CHANNEL_ID]
-    for chat_id in destinations:
-        try:
-            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-            
-            # دکمه‌های شیشه‌ای شیک متصل به آیدی رباتت
-            reply_markup = {
-                "inline_keyboard": [
-                    [{"text": "🔄 درخواست اسکن آنی و زنده", "url": "https://t.me/scannerDR_DRAGON_bot?start=scan"}],
-                    [{"text": "📦 دانلود فایل متنی آی‌پی‌ها", "url": "https://t.me/scannerDR_DRAGON_bot?start=file"}]
-                ]
-            }
-            
-            data = {
-                "chat_id": chat_id,
-                "text": text,
-                "parse_mode": "HTML",
-                "disable_web_page_preview": True,
-                "reply_markup": json.dumps(reply_markup)
-            }
-            req = urllib.request.Request(url, data=urllib.parse.urlencode(data).encode("utf-8"))
-            urllib.request.urlopen(req)
-            time.sleep(1)
-        except Exception as e:
-            print(f"Telegram Error: {e}")
+    try:
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        
+        # 👑 ترفند کپی مستقیم در کیبورد با استفاده از inline_query تلگرام
+        reply_markup = {
+            "inline_keyboard": [
+                [{"text": "📋 کپی یک‌جای تمام آی‌پی‌ها", "switch_inline_query_current_chat": raw_ips_text}],
+                [{"text": "🔄 درخواست اسکن آنی و زنده", "url": "https://t.me/scannerDR_DRAGON_bot?start=scan"}],
+                [{"text": "📦 دانلود فایل متنی آی‌پی‌ها", "url": "https://t.me/scannerDR_DRAGON_bot?start=file"}]
+            ]
+        }
+        
+        data = {
+            "chat_id": MY_PERSONAL_ID,
+            "text": text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+            "reply_markup": json.dumps(reply_markup)
+        }
+        
+        encoded_data = urllib.parse.urlencode(data).encode("utf-8")
+        req = urllib.request.Request(url, data=encoded_data, method="POST")
+        urllib.request.urlopen(req)
+    except Exception as e:
+        print(f"Telegram Error: {e}")
 
 def fetch_ips_to_scan():
     ips_to_scan = set()
@@ -190,15 +189,13 @@ def main():
             
         msg += f"<code>────────────────────────────</code>\n"
         
-        copy_all_text = "\n".join(raw_ips_list)
-        msg += f"👇 <b>[ CLICK TO COPY ALL TARGETS ]</b>\n"
-        msg += f"<code>{copy_all_text}</code>\n"
-        msg += f"<code>────────────────────────────</code>\n"
+        # آی‌پی‌ها را با یک فاصله ساده کنار هم می‌گذاریم تا در کیبورد به راحتی کپی شوند
+        copy_all_text = " ".join(raw_ips_list)
         
         tehran_time = datetime.utcnow() + timedelta(hours=3, minutes=30)
         time_str = tehran_time.strftime("%H:%M")
         
-        msg += f"📢 <b>@IP_ScannerDR</b> | 🕒 <i>SYS_TIME: {time_str} IRST</i>"
+        msg += f"🕒 <i>SYS_TIME: {time_str} IRST</i>"
         
         send_telegram(msg, copy_all_text)
 
