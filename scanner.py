@@ -91,7 +91,7 @@ def send_telegram(text, raw_ips_text):
     try:
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         
-        # 👑 ترفند کپی مستقیم در کیبورد با استفاده از inline_query تلگرام
+        # دکمه شیشه‌ای کپی مستقیم در کیبورد گوشی و سیستم کاربر بدون ارسال پیام اضافه
         reply_markup = {
             "inline_keyboard": [
                 [{"text": "📋 کپی یک‌جای تمام آی‌پی‌ها", "switch_inline_query_current_chat": raw_ips_text}],
@@ -110,7 +110,7 @@ def send_telegram(text, raw_ips_text):
         
         encoded_data = urllib.parse.urlencode(data).encode("utf-8")
         req = urllib.request.Request(url, data=encoded_data, method="POST")
-        urllib.request.urlopen(req)
+        urllib.request.urlopen(req, timeout=10)
     except Exception as e:
         print(f"Telegram Error: {e}")
 
@@ -120,7 +120,7 @@ def fetch_ips_to_scan():
     try:
         url = "https://raw.githubusercontent.com/vfarid/cf-clean-ips/main/list.txt"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:
             lines = response.read().decode('utf-8').splitlines()
         for line in lines:
             match = re.search(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', line)
@@ -189,7 +189,7 @@ def main():
             
         msg += f"<code>────────────────────────────</code>\n"
         
-        # آی‌پی‌ها را با یک فاصله ساده کنار هم می‌گذاریم تا در کیبورد به راحتی کپی شوند
+        # آی‌پی‌ها کنار هم چیده می‌شوند تا کپی تک‌کلیکی آن‌ها در کیبورد به بهترین شکل انجام شود
         copy_all_text = " ".join(raw_ips_list)
         
         tehran_time = datetime.utcnow() + timedelta(hours=3, minutes=30)
@@ -201,4 +201,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+            
