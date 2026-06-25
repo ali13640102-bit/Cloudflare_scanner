@@ -1,32 +1,28 @@
-name: Auto Cloudflare Scanner
+name: Cloudflare Scan Core
 
 on:
-  schedule:
-    - cron: '*/30 * * * *'  # اجرای خودکار دقیقاً هر ۳۰ دقیقه یک‌بار
-  workflow_dispatch:      # قابلیت اجرای دستی
+  workflow_dispatch:
+    inputs:
+      user_id:
+        description: 'Telegram Chat ID to send results'
+        required: false
+        default: '6453638080'
 
 jobs:
   run-scanner:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository code
-      uses: actions/checkout@v4
+      - name: Checkout Repo
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-    - name: Run IP Scanner
-      env:
-        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      run: python scanner.py
-
-    - name: Commit and Push Results
-      run: |
-        git config --local user.email "actions@github.com"
-        git config --local user.name "GitHub Actions"
-        git add result.txt
-        git commit -m "Update clean IPs" || exit 0
-        git push
+      - name: Run Scan Script
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TARGET_USER_ID: ${{ github.event.inputs.user_id }} # تبدیل شناسه کلاینت به متغیر محیطی پایتون
+        run: python scanner.py
         
