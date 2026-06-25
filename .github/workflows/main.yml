@@ -2,8 +2,8 @@ name: Auto Cloudflare Scanner
 
 on:
   schedule:
-    - cron: '37 * * * *'  # هر ساعت روی دقیقه ۳۷ (زمانی که سرورها خلوت‌ترند) اتوماتیک ران می‌شود
-  workflow_dispatch:      # بهت اجازه میده هر زمان که خواستی دستی هم اسکنر رو استارت بزنی
+    - cron: '*/30 * * * *'  # اجرای خودکار دقیقاً هر ۳۰ دقیقه یک‌بار
+  workflow_dispatch:      # قابلیت اجرای دستی
 
 jobs:
   run-scanner:
@@ -20,14 +20,13 @@ jobs:
     - name: Run IP Scanner
       env:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: python scanner.py
 
     - name: Commit and Push Results
       run: |
         git config --local user.email "actions@github.com"
         git config --local user.name "GitHub Actions"
-        git add result.txt history.txt v2ray_ips.txt
-        git commit -m "Update clean IPs, history and v2ray format" || exit 0
+        git add result.txt
+        git commit -m "Update clean IPs" || exit 0
         git push
-
+        
