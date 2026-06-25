@@ -77,9 +77,7 @@ def worker_round_2():
         ip_queue.task_done()
 
 def get_ping_bar(ping):
-    # ساخت نمودار خطی متنی برای پینگ (بخش اول - گزینه ۲)
     total_blocks = 8
-    # محاسبه بر اساس محدوده پینگ ۵۰ تا ۲۵۰
     filled_blocks = max(1, min(total_blocks, int((250 - ping) / 25))) if ping < 250 else 1
     bar = "🟩" * filled_blocks + "⬜" * (total_blocks - filled_blocks)
     return bar
@@ -91,25 +89,16 @@ def send_telegram(text, raw_ips_text):
     
     if not bot_token: return
     
-    # ساخت لینک وب‌هوک گیت‌هاب بدون نیاز به هاست (بخش چهارم - گزینه ۱۰)
-    # لینک مستقیم به اجرای ورک‌فلو اکشنز شما
-    repo_owner = "ScannerDR" # نام کاربری گیت‌هاب شما (اگه متفاوته عوضش کن)
-    repo_name = "Cloudflare-Scanner" # نام ریپازیتوری شما (اگه متفاوته عوضش کن)
-    github_token = os.environ.get("GH_PAT_TOKEN", "") # توکن امنیتی گیت‌هاب
-    
-    # ساختن یک لینک شیک برای دکمه وب‌هوک
-    trigger_link = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/workflows/main.yml/dispatches"
-    
     destinations = [MY_PERSONAL_ID, CHANNEL_ID]
     for chat_id in destinations:
         try:
             url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
             
-            # ساخت دکمه‌های شیشه‌ای لوکس
+            # دکمه‌های شیشه‌ای شیک متصل به آیدی رباتت
             reply_markup = {
                 "inline_keyboard": [
-                    [{"text": "🔄 درخواست اسکن آنی و زنده", "url": f"https://t.me/scannerDR_DRAGON_bot?start=scan"}],
-                    [{"text": "📦 دانلود فایل تکست آی‌پی‌ها", "url": f"https://t.me/scannerDR_DRAGON_bot?start=file"}]
+                    [{"text": "🔄 درخواست اسکن آنی و زنده", "url": "https://t.me/scannerDR_DRAGON_bot?start=scan"}],
+                    [{"text": "📦 دانلود فایل متنی آی‌پی‌ها", "url": "https://t.me/scannerDR_DRAGON_bot?start=file"}]
                 ]
             }
             
@@ -124,7 +113,7 @@ def send_telegram(text, raw_ips_text):
             urllib.request.urlopen(req)
             time.sleep(1)
         except Exception as e:
-            print(f"Telegram Error for {chat_id}: {e}")
+            print(f"Telegram Error: {e}")
 
 def fetch_ips_to_scan():
     ips_to_scan = set()
@@ -182,7 +171,6 @@ def main():
         for item in sorted_ips: f.write(f"{item['ip']}\n")
             
     if sorted_ips:
-        # دیزاین پایگاه هکری و سایبرپانکی (بخش اول - گزینه ۱)
         msg = f"🛰 <b>[ CLOUDFLARE CYBER SCANNER ]</b>\n"
         msg += f"<code>────────────────────────────</code>\n"
         
@@ -194,7 +182,6 @@ def main():
                 
             ping_bar = get_ping_bar(item['ping'])
             
-            # کارت مشخصات آی‌پی تفکیک شده (بخش اول - گزینه ۳)
             msg += f"┌─ {light} <b>RANK #{idx+1}</b>\n"
             msg += f"├ HOST: <code>{item['ip']}</code>\n"
             msg += f"└ PING: <b>{item['ping']}ms</b> | {ping_bar}\n\n"
