@@ -91,10 +91,13 @@ def send_telegram(text, raw_ips_text):
     try:
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         
-        # دکمه شیشه‌ای کپی مستقیم در کیبورد گوشی و سیستم کاربر بدون ارسال پیام اضافه
+        # کدگذاری ایمن لیست متنی به صورت ستونی برای لینک مستقیم کلیپ‌بورد تلگرام
+        encoded_ips = urllib.parse.quote(raw_ips_text)
+        
+        # ساخت دکمه شیشه‌ای کپی آنی مستقیم درون کیبورد با استاندارد جدید tg://copy
         reply_markup = {
             "inline_keyboard": [
-                [{"text": "📋 کپی یک‌جای تمام آی‌پی‌ها", "switch_inline_query_current_chat": raw_ips_text}],
+                [{"text": "📋 کپی یک‌جای تمام آی‌پی‌ها", "url": f"tg://copy?text={encoded_ips}"}],
                 [{"text": "🔄 درخواست اسکن آنی و زنده", "url": "https://t.me/scannerDR_DRAGON_bot?start=scan"}],
                 [{"text": "📦 دانلود فایل متنی آی‌پی‌ها", "url": "https://t.me/scannerDR_DRAGON_bot?start=file"}]
             ]
@@ -170,6 +173,7 @@ def main():
         for item in sorted_ips: f.write(f"{item['ip']}\n")
             
     if sorted_ips:
+        # هدر زیبای اسکنر
         msg = f"🛰 <b>[ CLOUDFLARE CYBER SCANNER ]</b>\n"
         msg += f"<code>────────────────────────────</code>\n"
         
@@ -181,24 +185,28 @@ def main():
                 
             ping_bar = get_ping_bar(item['ping'])
             
-            msg += f"┌─ {light} <b>RANK #{idx+1}</b>\n"
-            msg += f"├ HOST: <code>{item['ip']}</code>\n"
-            msg += f"└ PING: <b>{item['ping']}ms</b> | {ping_bar}\n\n"
+            # چیدمان مدل اول (هکری و فوق‌العاده جمع‌وجور)
+            msg += f"⚡️ {light} <b>#{idx+1:02d}</b> ── <code>{item['ip']}</code> ⚡️ <b>{item['ping']}ms</b>\n"
+            msg += f"{ping_bar}\n\n"
             
             raw_ips_list.append(item['ip'])
             
         msg += f"<code>────────────────────────────</code>\n"
         
-        # آی‌پی‌ها کنار هم چیده می‌شوند تا کپی تک‌کلیکی آن‌ها در کیبورد به بهترین شکل انجام شود
-        copy_all_text = " ".join(raw_ips_list)
+        # چیدمان آی‌پی‌ها کاملاً ستونی و تمیز برای کپی شدن در حافظه سیستم
+        copy_all_text = "\n".join(raw_ips_list)
         
+        # محاسبه ساعت زنده و آنلاین ایران همراه با ثانیه‌شمار دقیق
         tehran_time = datetime.utcnow() + timedelta(hours=3, minutes=30)
-        time_str = tehran_time.strftime("%H:%M")
+        time_str = tehran_time.strftime("%H:%M:%S")
         
-        msg += f"🕒 <i>SYS_TIME: {time_str} IRST</i>"
+        # بخش انتهایی امضا همراه با آیدی‌ها
+        msg += f"🕒  {time_str}\n"
+        msg += f"🌐 @IP_ScannerDR\n"
+        msg += f"👤 @Eror_508"
         
         send_telegram(msg, copy_all_text)
 
 if __name__ == "__main__":
     main()
-            
+    
