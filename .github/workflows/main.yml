@@ -1,28 +1,44 @@
-name: Cloudflare Scan Core
+name: Cloudflare IP Scanner
 
 on:
   workflow_dispatch:
     inputs:
       user_id:
-        description: 'Telegram Chat ID to send results'
-        required: false
-        default: '6453638080'
+        description: 'Telegram User ID'
+        required: true
+        default: 'AUTO_SCAN'
+
+permissions:
+  contents: write  # 🔥 این خط حتماً باید باشد تا گیت‌هاب اجازه ذخیره فایل را بدهد
 
 jobs:
-  run-scanner:
+  scan:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v3
+    - name: Checkout Repository
+      uses: actions/checkout@v3
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-python-version: '3.x'
 
-      - name: Run Scan Script
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TARGET_USER_ID: ${{ github.event.inputs.user_id }} # تبدیل شناسه کلاینت به متغیر محیطی پایتون
-        run: python scanner.py
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+
+    - name: Run IP Scanner
+      env:
+        TELEGRAM_BOT_TOKEN: "8978709291:AAGGS14S2qsA3vdSE-yLjgDfRaOJSH5saKE"
+        TARGET_USER_ID: ${{ github.event.inputs.user_id }}
+      run: python scanner.py
+
+    # 🔥 بخش جدید: کامیت و پوش کردن فایل result.txt به ریپازیتوری گیت‌هاب
+    - name: Commit and Push Results
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add result.txt
+        # فقط در صورتی کامیت کن که فایل تغییر کرده باشه تا ارور ندهد
+        git diff --quiet && git diff --staged --quiet || (git commit -m "🔄 آپدیت خودکار آی‌پی‌های اسکن شده [result.txt]" && git push)
         
