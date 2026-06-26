@@ -77,27 +77,22 @@ def worker_round_2():
                 round_2_results.append({"ip": ip_info['ip'], "ping": avg_ping, "loss": packet_loss})
         ip_queue.task_done()
 
-# تابع ساخت نوار گرافیکی پینگ دقیقاً مطابق فرمت درخواستی شما
 def get_ping_bar(ping):
     total_blocks = 8
     filled_blocks = max(1, min(total_blocks, int((250 - ping) / 25))) if ping < 250 else 1
     bar = "🟩" * filled_blocks + "⬜" * (total_blocks - filled_blocks)
     return bar
 
-def send_telegram_results(text, raw_ips_text, target_user_id):
+def send_telegram_results(text, target_user_id):
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not bot_token: 
         return
     
-    # مقصدهای ارسال پیام اصلی نتایج
-    # ۱. کاربر متقاضی (یا سیگنال خودکار) ۲. کانال عمومی شما
     CHANNEL_ID = "@IP_ScannerDR"
-    
     destinations = []
     if target_user_id not in ["AUTO_SCAN", "AUTO_SCAN_ALL"]:
         destinations.append(target_user_id)
     
-    # اگر اسکن خودکار همگانی بود یا آی‌پی شخصی ارسال شد، به کانال هم فروخته شود
     if target_user_id == "AUTO_SCAN_ALL" or target_user_id not in ["AUTO_SCAN", "AUTO_SCAN_ALL"]:
         destinations.append(CHANNEL_ID)
 
@@ -105,10 +100,10 @@ def send_telegram_results(text, raw_ips_text, target_user_id):
         try:
             url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
             
-            # ایجاد دکمه شیشه‌ای کپی یکجای آی‌پی‌ها با استفاده از switch_inline_query_current_chat
+            # تغییر دکمه کپی به callback_data معمولی جهت گوش دادن ربات bot.py به آن
             reply_markup = {
                 "inline_keyboard": [[
-                    {"text": "📋 ارسال همه آی‌پی‌ها یک‌جا", "switch_inline_query_current_chat": f"\n\n{raw_ips_text}"}
+                    {"text": "📋 ارسال همه آی‌پی‌ها یک‌جا", "callback_data": "send_ips_inline"}
                 ]]
             }
             
@@ -153,9 +148,7 @@ def fetch_ips_to_scan():
     return list(ips_to_scan)
 
 def main():
-    # دریافت آیدی کاربر از متغیرهای محیطی گیت‌هاب اکشنز
     target_user_id = os.environ.get("TARGET_USER_ID", "6453638080")
-    
     target_ips = fetch_ips_to_scan()
     if not target_ips: return
     random.shuffle(target_ips)
@@ -178,16 +171,14 @@ def main():
     
     sorted_ips = sorted(round_2_results, key=lambda x: (x['loss'], x['ping']))
     
-    # ۱. بروزرسانی و ذخیره نتایج در فایل result.txt
+    # ذخیره تمام آی‌پی‌های اسکن شده در فایل متنی ریپازیتوری
     with open("result.txt", "w") as f:
         for item in sorted_ips: f.write(f"{item['ip']}\n")
             
     if sorted_ips:
-        # ۲. ساخت متن پیام نتایج دقیقاً مطابق الگوی گرافیکی شما
         msg = f"🛰 <b>[ CLOUDFLARE SCANNER ]</b>\n"
         msg += f"<code>────────────────────────────</code>\n\n"
         
-        raw_ips_list = []
         for idx, item in enumerate(sorted_ips[:10]):
             if item['ping'] <= 110: light = "🟢"
             elif item['ping'] <= 190: light = "🟡"
@@ -196,11 +187,9 @@ def main():
             ping_bar = get_ping_bar(item['ping'])
             msg += f"⚡️ {light} <b>#{idx+1:02d}</b> ── <code>{item['ip']}</code>  ⚡️ <b>{item['ping']}ms</b>\n"
             msg += f"{ping_bar}\n\n"
-            raw_ips_list.append(item['ip'])
             
         msg += f"<code>────────────────────────────</code>\n"
         
-        # محاسبه زمان به وقت تهران (GMT+3:30)
         tehran_time = datetime.utcnow() + timedelta(hours=3, minutes=30)
         time_str = tehran_time.strftime("%H:%M:%S")
         
@@ -208,12 +197,7 @@ def main():
         msg += f"🌐 @IP_ScannerDR\n"
         msg += f"👤 @Eror_508"
         
-        # ۳. ساخت لیست متنی ستونی برای قرار گرفتن پشت دکمه شیشه‌ای کپی
-        copy_text_header = "📋 لیست تمام آی‌پی‌های اسکن شده (تک‌کلیک کپی):\n\n"
-        copy_all_text = copy_text_header + "\n".join(raw_ips_list)
-        
-        # ارسال نهایی پیام
-        send_telegram_results(msg, copy_all_text, target_user_id)
+        send_telegram_results(msg, target_user_id)
 
 if __name__ == "__main__":
     main()
