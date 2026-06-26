@@ -6,9 +6,8 @@ import ipaddress
 import time
 import os
 import urllib.request
-import re
-import random
-import sys
+import urllib.parse
+import json
 
 PORT = 443
 TIMEOUT = 2.0
@@ -32,7 +31,6 @@ def ping_ip(ip):
         secure_sock = context.wrap_socket(sock, server_hostname=ip)
         secure_sock.connect((ip, PORT))
         ping_time = int((time.time() - start_time) * 1000)
-        
         websocket_request = (
             f"GET / HTTP/1.1\r\n"
             f"Host: {ip}\r\n"
@@ -41,79 +39,88 @@ def ping_ip(ip):
             f"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
             f"Sec-WebSocket-Version: 13\r\n\r\n"
         )
-        secure_sock.sendall(websocket_request.encode())
-        response = secure_sock.recv(1024).decode(errors='ignore')
+        secure_sock.send(websocket_request.encode('utf-8'))
+        response = secure_sock.recv(1024).decode('utf-8', errors='ignore')
         secure_sock.close()
-        if "HTTP/1.1 101" in response or "Sec-WebSocket-Accept" in response:
+        if "HTTP/1.1 101" in response or "Server: cloudflare" in response:
             return ping_time
+    except:
         return None
-    except Exception: return None
-
-def test_ip_loss_and_ping(ip):
-    success_count = 0
-    total_ping = 0
-    for _ in range(PACKET_TEST_COUNT):
-        p = ping_ip(ip)
-        if p is not None:
-            success_count += 1
-            total_ping += p
-        time.sleep(0.1)
-    loss = int(((PACKET_TEST_COUNT - success_count) / PACKET_TEST_COUNT) * 100)
-    avg_ping = int(total_ping / success_count) if success_count > 0 else 999
-    return loss, avg_ping
+    return None
 
 def worker_round_1():
     while not ip_queue.empty():
         ip = ip_queue.get()
-        p = ping_ip(ip)
-        if p is not None and p <= MAX_ALLOWED_PING:
-            round_1_results.append(ip)
+        ping = ping_ip(ip)
+        if ping is not None:
+            round_1_results.append({"ip": ip, "ping": ping})
         ip_queue.task_done()
 
 def worker_round_2():
     while not ip_queue.empty():
-        ip = ip_queue.get()
-        loss, ping = test_ip_loss_and_ping(ip)
-        if loss < 100 and ping <= MAX_ALLOWED_PING:
-            round_2_results.append({'ip': ip, 'loss': loss, 'ping': ping})
+        ip_info = ip_queue.get()
+        success_count = 0
+        total_ping = 0
+        for _ in range(PACKET_TEST_COUNT):
+            p_time = ping_ip(ip_info['ip'])
+            if p_time is not None:
+                success_count += 1
+                total_ping += p_time
+        if success_count > 0:
+            avg_ping = int(total_ping / success_count)
+            packet_loss = int(((PACKET_TEST_COUNT - success_count) / PACKET_TEST_COUNT) * 100)
+            if avg_ping <= MAX_ALLOWED_PING:
+                round_2_results.append({"ip": ip_info['ip'], "ping": avg_ping, "loss": packet_loss})
         ip_queue.task_done()
 
-def load_ips_from_github():
-    urls = [
-        "https://raw.githubusercontent.com/vfarid/cf-clean-ips/main/list.txt",
-        "https://raw.githubusercontent.com/ircfspace/cf2dns/master/list.txt"
-    ]
-    ips = set()
-    ipv4_pattern = re.compile(r'^⚓?\s*([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})')
-    for url in urls:
+def send_telegram_with_button(text, copy_text):
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    
+    # مقصدهای ارسال: آیدی عددی خودت و آیدی کانالت
+    MY_PERSONAL_ID = "6453638080"
+    CHANNEL_ID = "@IP_ScannerDR"
+    
+    if not bot_token: return
+    
+    destinations = [MY_PERSONAL_ID, CHANNEL_ID]
+    
+    for chat_id in destinations:
         try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=10) as res:
-                content = res.read().decode('utf-8')
-                for line in content.split('\n'):
-                    line = line.strip()
-                    match = ipv4_pattern.match(line)
-                    if match: ips.add(match.group(1))
-                    elif '/' in line:
-                        try:
-                            for ip in ipaddress.IPv4Network(line, strict=False).hosts(): ips.add(str(ip))
-                        except Exception: pass
-        except Exception: pass
-    return list(ips)
+            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            
+            # ساخت دکمه شیشه‌ای کپی یکجای آی‌پی‌ها
+            reply_markup = {
+                "inline_keyboard": [[
+                    {"text": "🚀 کپی یکجای آی‌پی‌ها", "switch_inline_query_current_chat": copy_text}
+                ]]
+            }
+            
+            data = {
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "HTML",
+                "reply_markup": json.dumps(reply_markup)
+            }
+            
+            req = urllib.request.Request(url, data=urllib.parse.urlencode(data).encode("utf-8"))
+            urllib.request.urlopen(req)
+            time.sleep(1) # فاصله کوتاه برای جلوگیری از اسپم تلگرام
+        except Exception as e:
+            print(f"Telegram Error for {chat_id}: {e}")
 
-if __name__ == "__main__":
-    print("🚀 Running Cloudflare Worker Engine...")
-    all_ips = load_ips_from_github()
-    if not all_ips:
-        backup_ranges = ["104.16.0.0/12", "172.64.0.0/13"]
-        for r in backup_ranges:
-            for ip in ipaddress.IPv4Network(r).hosts():
-                all_ips.append(str(ip))
-                if len(all_ips) > 1500: break
-
-    sampled_ips = random.sample(all_ips, min(len(all_ips), 1500))
-    for ip in sampled_ips: ip_queue.put(ip)
-
+def main():
+    try:
+        with open("ips.txt", "r") as f: lines = f.read().splitlines()
+    except FileNotFoundError: return
+    
+    lines = [line.strip() for line in lines if line.strip()]
+    if not lines: return
+    
+    for line in lines:
+        try:
+            for ip in ipaddress.IPv4Network(line, strict=False): ip_queue.put(str(ip))
+        except ValueError: ip_queue.put(line)
+            
     threads = []
     for _ in range(THREAD_COUNT_ROUND_1):
         t = threading.Thread(target=worker_round_1)
@@ -130,10 +137,34 @@ if __name__ == "__main__":
     
     sorted_ips = sorted(round_2_results, key=lambda x: (x['loss'], x['ping']))
     
-    # خروجی گرفتن و ذخیره مستقیم در ریپازیتوری جهت سینک شدن با حلقه اصلی ربات
+    # ذخیره در فایل متنی
     with open("result.txt", "w") as f:
-        for item in sorted_ips:
-            f.write(f"{item['ip']}\n")
+        for item in sorted_ips: f.write(f"{item['ip']}\n")
             
-    print(f"✅ Scanning Done. Result generated successfully.")
-    
+    if sorted_ips:
+        # دیزاین فوق‌العاده شیک و جدید
+        msg = f"⚡️ <b>برترین آی‌پی‌های تمیز کلودفلر</b>\n"
+        msg += f"───────────────────\n"
+        
+        raw_ips_list = []
+        for idx, item in enumerate(sorted_ips[:10]):
+            if item['loss'] == 0:
+                signal = "📶 عالی"
+            elif item['loss'] <= 33:
+                signal = "⚡️ پایدار"
+            else:
+                signal = "⚠️ نوسانی"
+                
+            msg += f"🔹 <code>{item['ip']}</code>  ➔  ⏱ <b>{item['ping']}ms</b> | {signal}\n"
+            raw_ips_list.append(item['ip'])
+            
+        msg += f"───────────────────\n"
+        msg += f"📢 <b>@IP_ScannerDR</b> | 🔄 <i>بروزرسانی خودکار</i>"
+        
+        copy_all_text = "\n".join(raw_ips_list)
+        
+        send_telegram_with_button(msg, copy_all_text)
+
+if __name__ == "__main__":
+    main()
+
